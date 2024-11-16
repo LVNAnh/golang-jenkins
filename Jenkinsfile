@@ -1,78 +1,58 @@
 pipeline {
-    agent {
-        docker {
-            image 'jenkins/jenkins:lts'
-            args '-u root:root' // Dùng quyền root nếu cần cài đặt thêm package
-        }
-    }
+    agent any
 
     environment {
-        DOCKER_IMAGE = "jenkins/jenkins"
-        DOCKER_TAG = "lts"
-        GIT_REPO = "https://github.com/LVNAnh/golang-jenkins.git"
-        GIT_BRANCH = "master"
+        DOCKER_IMAGE = 'trongpham99/golang-jenkins'
+        DOCKER_TAG = 'latest'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                echo 'Cloning repository...'
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: "*/${env.GIT_BRANCH}"]],
-                    userRemoteConfigs: [[
-                        url: "${env.GIT_REPO}"
-                    ]]
-                ])
+                git branch: 'master', url: 'https://github.com/LVNAnh/golang-jenkins.git'
             }
         }
 
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image...'
-                sh '''
-                docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                '''
+                script {
+                    docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                }
             }
         }
 
-        stage('Test') {
+        stage('Run Tests') {
             steps {
                 echo 'Running tests...'
-                sh '''
-                docker run --rm ${DOCKER_IMAGE}:${DOCKER_TAG} sh -c "echo Running tests; sleep 2"
-                '''
             }
         }
 
-        stage('Push Image') {
+        stage('Push to Docker Hub') {
             steps {
-                echo 'Skipping Docker push as this is an internal Jenkins image.'
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-credentials') {
+                        docker.image("${DOCKER_IMAGE}:${DOCKER_TAG}").push()
+                    }
+                }
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy Golang to DEV') {
             steps {
-                echo 'Deploying application...'
-                sh '''
-                echo Deploying with Jenkins Docker image: ${DOCKER_IMAGE}:${DOCKER_TAG}
-                '''
+                echo 'Deploying to DEV...'
+                sh 'docker image pull trongpham99/golang-jenkins:latest'
+                sh 'docker container stop golang-jenkins || echo "this container does not exist"'
+                sh 'docker network create dev || echo "this network exists"'
+                sh 'echo y | docker container prune '
+
+                sh 'docker container run -d --rm --name server-golang -p 4000:3000 --network dev trongpham99/golang-jenkins:latest'
             }
         }
     }
 
     post {
         always {
-            echo 'Cleaning up resources...'
-            sh '''
-            docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true
-            '''
-        }
-        success {
-            echo 'Pipeline executed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Please check the logs.'
+            cleanWs()
         }
     }
 }
