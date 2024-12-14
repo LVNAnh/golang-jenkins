@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'trongpham99/golang-jenkins'
+        DOCKER_IMAGE = 'lvnanh/testbaitap'
         DOCKER_TAG = 'latest'
     }
 
@@ -45,7 +45,7 @@ pipeline {
                 sh 'docker network create dev || echo "this network exists"'
                 sh 'echo y | docker container prune '
 
-                sh 'docker container run -d --rm --name server-golang -p 4000:3000 --network dev trongpham99/golang-jenkins:latest'
+                sh 'docker container run -d --rm --name server-golang -p 4000:3000 --network dev lvnanh/testbaitap:latest'
             }
         }
     }
